@@ -28,32 +28,33 @@ RangeError: Maximum call stack size exceeded
     at Object.process
     at flushPostFlushCbs
     at flushJobs
-    at flushJobs (infinite recursion)
+    (infinite recursion)
 ```
 
-**Production mode** (`npm run build && npm run preview`) — observed in real-world Nuxt app:
+**Production mode** — observed in a real-world Nuxt web app:
 
 ```
 TypeError: Cannot destructure property 'bum' of 'y' as it is null.
     at unmountComponent
     at unmount
     at Object.remove (Teleport.remove)
-    at unmount
-    at unmountComponent
 ```
 
-## Confirmed (Vue 3.5.30)
+The page freezes — URL updates but the UI does not re-render.
 
-No errors in either dev or production mode. Navigation works as expected.
+## With Vue 3.5.30 — no error
+
+Changing `vue` to `3.5.30` in `package.json` and `overrides`, then running `rm -rf node_modules .nuxt && npm install && npm run dev` — the same steps produce **no errors**.
 
 ## Scenario
 
-- Nuxt 4 app in SSR mode with **page transitions** (`out-in`)
+- Nuxt 4 app with SSR enabled
 - Page A (`index.vue`):
+  - `await useFetch()` in setup (triggers Suspense wrapping by `<NuxtPage>`)
   - Two `<teleport to="body">` with `<Transition>` wrapping `v-if` content containing nested components
-  - Multiple reactive changes after `navigateTo()` (clear items + reset flag in `finally`)
+  - Reactive state changes after `navigateTo()` (clear items array + reset flag in `finally`)
 - Page B (`page-b.vue`): has async setup (`await useFetch(...)`) and its own `<teleport to="body">`
-- The crash occurs during Suspense + Transition branch swap — deferred Teleport post-flush callbacks create an infinite loop in the scheduler (`queueEffectWithSuspense` → `flushJobs` cycle)
+- The crash occurs during the Suspense branch swap — deferred Teleport post-flush callbacks create an infinite loop in the scheduler (`queueEffectWithSuspense` → `flushJobs` cycle)
 
 ## Candidate PRs (merged between 3.5.30 and 3.5.31)
 
@@ -69,19 +70,6 @@ All merged on the same day and interact with Suspense/Teleport/unmount:
 
 - **Works**: Vue 3.5.30
 - **Broken**: Vue 3.5.31+
-- **Framework**: Nuxt 4 (SSR mode)
+- **Framework**: Nuxt 4 (`^4.1.1`, SSR mode)
 
-## Workaround
-
-Pin Vue to `3.5.30`:
-
-```json
-{
-  "dependencies": {
-    "vue": "3.5.30"
-  },
-  "overrides": {
-    "vue": "3.5.30"
-  }
-}
 ```
